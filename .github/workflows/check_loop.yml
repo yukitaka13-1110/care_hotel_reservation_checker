@@ -1,0 +1,74 @@
+name: 空室チェック（15分ループ）
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+
+jobs:
+  check-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run availability checker (loop)
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        run: node check-loop.mjs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          path: "*.png"
+          retention-days: 1
+
+      - name: Notify on failure (transition from success)
+        if: failure()
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREV_STATUS=$(gh run list --workflow=check_loop.yml --limit=2 --json conclusion --jq '.[1].conclusion // "none"' 2>/dev/null || echo "none")
+          echo "Previous run status: $PREV_STATUS"
+          if [ "$PREV_STATUS" = "success" ]; then
+            curl -s -X POST https://api.line.me/v2/bot/message/broadcast \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" \
+              -d '{"messages":[{"type":"text","text":"⚠️ 空室チェックでエラーが発生しました。\nサイトの構造が変わった可能性があります。"}]}'
+          fi
