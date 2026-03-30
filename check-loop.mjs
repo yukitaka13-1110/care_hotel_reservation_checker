@@ -12,7 +12,7 @@ const TARGET_ROOM_TYPE = "産後ケアホテル";
 const TARGET_MONTHS = [6, 7, 8, 9];
 
 const LOOP_DURATION_MS = 15 * 60 * 1000; // 15分
-const CHECK_INTERVAL_MS = 30 * 1000; // 30秒
+const CHECK_INTERVAL_MS = 1 * 1000; // 1秒
 
 // ============================================================
 // LINE通知
@@ -288,13 +288,8 @@ async function main() {
         console.error(`チェック #${checkCount} でエラー: ${checkError.message}`);
       }
 
-      // 次のチェックまで待機
-      const processingTime = Date.now() - checkStartTime;
-      const remaining = LOOP_DURATION_MS - (Date.now() - startTime);
-      if (remaining <= 0) break;
-      const waitTime = Math.min(Math.max(CHECK_INTERVAL_MS - processingTime, 0), remaining);
-      console.log(`処理時間: ${(processingTime / 1000).toFixed(1)}秒、次のチェックまで ${(waitTime / 1000).toFixed(1)}秒待機...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      // 次のチェックまで1秒待機
+      await new Promise((resolve) => setTimeout(resolve, CHECK_INTERVAL_MS));
     }
 
     console.log(`\n=== ループチェック完了: 合計${checkCount}回チェック、空き検出なし ===`);
