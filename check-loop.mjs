@@ -41,60 +41,139 @@ async function sendLineNotification(message) {
 // カレンダーに表示中の月を取得する
 // ============================================================
 async function getDisplayedMonths(page) {
-  const monthHeaders = await page.locator('[class*="calendar"] [class*="month"], [class*="Calendar"] [class*="Month"], [class*="year"]').all();
-
-  if (monthHeaders.length === 0) {
-    const text = await page.textContent("body");
-    const matches = [...text.matchAll(/(\d{1,2})月\s*(\d{4})/g)];
-    return matches.map((m) => ({ month: parseInt(m[1]), year: parseInt(m[2]) }));
-  }
+  const headers = await page.locator("div.css-qb8zhg").all();
 
   const months = [];
-  for (const header of monthHeaders) {
-    const text = await header.textContent();
+  for (const header of headers) {
+    const text = (await header.textContent()).trim();
     const match = text.match(/(\d{1,2})月\s*(\d{4})/);
     if (match) {
       months.push({ month: parseInt(match[1]), year: parseInt(match[2]) });
     }
   }
-  return months;
+
+  if (months.length > 0) return months;
+
+  // フォールバック
+  console.log("月ヘッダーセレクタが変更された可能性があります。フォールバック検出を使用...");
+  const bodyText = await page.textContent("body");
+  const matches = [...bodyText.matchAll(/(\d{1,2})月\s+(\d{4})/g)];
+  return matches
+    .map((m) => ({ month: parseInt(m[1]), year: parseInt(m[2]) }))
+    .filter((m) => m.month >= 1 && m.month <= 12);
+}
+
+// ============================================================
+// 次の月へ進む
+// ============================================================
+async function goToNextMonth(page) {
+  const nextButton = page.locator("a.css-183ow1f").last();
+
+  if ((await nextButton.count()) === 0) {
+    console.log("「次へ」ボタンが見つかりません。");
+    return false;
+  }
+
+  await nextButton.click();
+  await page.waitForTimeout(1500);
+  return true;
 }
 
 // ============================================================
 // 現在表示中のカレンダーから空き日を検出する
+//
+// 判定: 以下のいずれかを満たすセルを「空きあり」とする
+//   1. 親span の cursor が pointer（クリック可能）
+//   2. css-qdcf6i の cursor が pointer（×マークがクリック可能＝空きあり）
+//      ※ ×は ::before/::after 疑似要素で描画されるためテキストでは拾えない
 // ============================================================
-async function checkCurrentCalendarAvailability(page) {
-  const availableDates = [];
+async function checkCurrentCalendarAvailability(page, targetMonth) {
+  const result = await page.evaluate((tMonth) => {
+    const containers = document.querySelectorAll("div.css-fco0xz");
+    if (containers.length === 0) return { error: "カレンダーコンテナが見つかりません", available: [] };
 
-  const dateCells = await page.locator('table td, [class*="calendar"] [class*="day"], [class*="Calendar"] [class*="Day"], [class*="date"], [class*="cell"]').all();
+    const monthHeaders = document.querySelectorAll("div.css-qb8zhg");
+    let targetContainerIndex = -1;
 
-  if (dateCells.length === 0) {
-    console.log("日付セルが見つかりませんでした。");
-    return availableDates;
-  }
-
-  for (const cell of dateCells) {
-    const text = (await cell.textContent()).trim();
-    if (!text || text.match(/^[日月火水木金土]$/)) continue;
-
-    const dayMatch = text.match(/(\d{1,2})/);
-    if (!dayMatch) continue;
-
-    const day = parseInt(dayMatch[1]);
-    if (day < 1 || day > 31) continue;
-
-    const hasX = text.includes("×") || text.includes("✕") || text.includes("✗") || text.includes("╳");
-
-    const isDisabled =
-      (await cell.getAttribute("class"))?.match(/disabled|inactive|past|unavailable/i) ||
-      (await cell.getAttribute("aria-disabled")) === "true";
-
-    if (!hasX && !isDisabled && day >= 1) {
-      availableDates.push(day);
+    for (let i = 0; i < monthHeaders.length; i++) {
+      const text = monthHeaders[i].textContent.trim();
+      const match = text.match(/(\d{1,2})月/);
+      if (match && parseInt(match[1]) === tMonth) {
+        targetContainerIndex = i;
+        break;
+      }
     }
+
+    if (targetContainerIndex === -1) return { error: `${tMonth}月のヘッダーが見つかりません`, available: [] };
+
+    const container = containers[targetContainerIndex];
+    if (!container) return { error: `${tMonth}月のコンテナが見つかりません`, available: [] };
+
+    const dateSpans = container.querySelectorAll("span[class]");
+    const available = [];
+    const PAST_CLASS = "css-1awambs";
+
+    for (const span of dateSpans) {
+      const children = span.querySelectorAll(":scope > span");
+      if (children.length === 0) continue;
+
+      const dayText = children[0].textContent.trim();
+      if (!/^\d{1,2}$/.test(dayText)) continue;
+      const day = parseInt(dayText);
+      if (day < 1 || day > 31) continue;
+
+      if (span.className === PAST_CLASS) continue;
+
+      const parentStyle = window.getComputedStyle(span);
+
+      const statusSpan = span.querySelector(".css-qdcf6i");
+      const statusCursor = statusSpan ? window.getComputedStyle(statusSpan).cursor : "auto";
+
+      const isAvailable =
+        parentStyle.cursor === "pointer" ||
+        statusCursor === "pointer";
+
+      if (isAvailable) {
+        available.push(day);
+      }
+    }
+
+    return { available };
+  }, targetMonth);
+
+  if (result.error) {
+    console.log(result.error);
+    return [];
   }
 
-  return availableDates;
+  return result.available;
+}
+
+// ============================================================
+// 部屋タイプを選択
+// ============================================================
+async function selectRoomType(page) {
+  const roomTypeDropdown = page.locator("text=全ての部屋タイプ").first();
+
+  if ((await roomTypeDropdown.count()) === 0) {
+    console.log("「全ての部屋タイプ」ドロップダウンが見つかりません。");
+    return false;
+  }
+
+  await roomTypeDropdown.click();
+  await page.waitForTimeout(1000);
+
+  const option = page.locator(`text=${TARGET_ROOM_TYPE}`).first();
+
+  if ((await option.count()) === 0) {
+    console.log(`「${TARGET_ROOM_TYPE}」の選択肢が見つかりません。`);
+    return false;
+  }
+
+  await option.click();
+  console.log(`部屋タイプ「${TARGET_ROOM_TYPE}」を選択しました`);
+  await page.waitForTimeout(2000);
+  return true;
 }
 
 // ============================================================
@@ -109,14 +188,7 @@ async function checkAvailability(page) {
   console.log(`ページタイトル: ${title}`);
 
   // 部屋タイプを選択
-  const roomTypeOption = page.locator(`text=${TARGET_ROOM_TYPE}`).first();
-  if ((await roomTypeOption.count()) > 0) {
-    await roomTypeOption.click();
-    console.log("部屋タイプ「産後ケアホテル」を選択しました");
-    await page.waitForTimeout(2000);
-  } else {
-    console.log("部屋タイプ選択肢が見つかりません。全部屋タイプのまま続行します。");
-  }
+  await selectRoomType(page);
 
   // スクリーンショット（上書き保存）
   await page.screenshot({ path: "screenshot_loop.png", fullPage: true });
@@ -129,26 +201,20 @@ async function checkAvailability(page) {
 
     while (attempts < maxAttempts) {
       const displayedMonths = await getDisplayedMonths(page);
-      console.log(`表示中の月: ${displayedMonths.map((m) => `${m.month}月${m.year}`).join(", ")}`);
-
       const found = displayedMonths.some((m) => m.month === targetMonth);
       if (found) break;
 
-      const nextButton = page.locator(
-        'button[aria-label*="next"], button[aria-label*="次"], [class*="next"], [class*="Next"], [class*="arrow-right"], [class*="forward"]'
-      ).first();
-
-      if ((await nextButton.count()) === 0) {
-        console.log("「次へ」ボタンが見つかりません");
-        break;
-      }
-
-      await nextButton.click();
-      await page.waitForTimeout(1500);
+      const navigated = await goToNextMonth(page);
+      if (!navigated) break;
       attempts++;
     }
 
-    const available = await checkCurrentCalendarAvailability(page);
+    if (attempts >= maxAttempts) {
+      console.log(`${targetMonth}月への移動に失敗しました`);
+      continue;
+    }
+
+    const available = await checkCurrentCalendarAvailability(page, targetMonth);
     if (available.length > 0) {
       allAvailability[targetMonth] = available;
       console.log(`${targetMonth}月: 空きあり → ${available.join(", ")}日`);
