@@ -190,9 +190,6 @@ async function checkAvailability(page) {
   // 部屋タイプを選択
   await selectRoomType(page);
 
-  // スクリーンショット（上書き保存）
-  await page.screenshot({ path: "screenshot_loop.png", fullPage: true });
-
   const allAvailability = {};
 
   for (const targetMonth of TARGET_MONTHS) {
@@ -218,6 +215,8 @@ async function checkAvailability(page) {
     if (available.length > 0) {
       allAvailability[targetMonth] = available;
       console.log(`${targetMonth}月: 空きあり → ${available.join(", ")}日`);
+      // 空きがあった月のスクリーンショットを保存
+      await page.screenshot({ path: `available_month_${targetMonth}.png`, fullPage: true });
     } else {
       console.log(`${targetMonth}月: 空きなし`);
     }

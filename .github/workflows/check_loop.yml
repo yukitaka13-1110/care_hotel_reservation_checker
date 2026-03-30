@@ -2,6 +2,7 @@ name: 空室チェック（15分ループ）
 
 on:
   repository_dispatch:
+    types: [CareHotelCheck]
   workflow_dispatch:
 
 jobs:
@@ -50,13 +51,14 @@ jobs:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         run: node check-loop.mjs
 
-      - name: Upload screenshots
+      - name: Upload screenshots (空きがあった場合のみ)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ github.run_id }}
-          path: "*.png"
-          retention-days: 1
+          name: available-screenshots-${{ github.run_id }}
+          path: "available_*.png"
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Notify on failure (transition from success)
         if: failure()
