@@ -1,0 +1,13 @@
+{
+  "name": "care-hotel-reservation-checker",
+  "version": "1.0.0",
+  "description": "ケアホテル空室監視ツール",
+  "type": "module",
+  "scripts": {
+    "check": "node check.mjs",
+    "check-loop": "node check-loop.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
