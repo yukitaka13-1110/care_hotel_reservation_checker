@@ -293,6 +293,11 @@ async function main() {
     }
 
     console.log(`\n=== ループチェック完了: 合計${checkCount}回チェック、空き検出なし ===`);
+
+    // LINE通知の疎通確認
+    if (LINE_CHANNEL_ACCESS_TOKEN) {
+      await sendLineNotification(`✅ 空室チェック完了（${checkCount}回チェック、空き検出なし）`);
+    }
   } catch (error) {
     console.error("エラーが発生しました:", error.message);
     process.exit(1);
