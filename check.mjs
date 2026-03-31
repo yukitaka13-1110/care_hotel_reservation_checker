@@ -72,7 +72,7 @@ async function goToNextMonth(page) {
   }
 
   await nextButton.click();
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(8000);
   return true;
 }
 
