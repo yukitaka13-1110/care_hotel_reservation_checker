@@ -161,7 +161,7 @@ async function selectRoomType(page) {
   }
 
   await roomTypeDropdown.click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(5000);
 
   const option = page.locator(`text=${TARGET_ROOM_TYPE}`).first();
 
