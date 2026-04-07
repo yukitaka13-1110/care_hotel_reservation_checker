@@ -71,35 +71,8 @@ async function goToNextMonth(page) {
     return false;
   }
 
-  // クリック前の月ヘッダー一覧を取得し、変化するまで待機
-  const beforeMonths = await getDisplayedMonths(page);
-  const beforeKey = beforeMonths.map((m) => `${m.year}-${m.month}`).join(",");
-
   await nextButton.click();
-
-  try {
-    await page.waitForFunction(
-      (prevKey) => {
-        const headers = document.querySelectorAll("div.css-qb8zhg");
-        const months = [];
-        for (const h of headers) {
-          const m = h.textContent.trim().match(/(\d{1,2})月\s*(\d{4})/);
-          if (m) months.push(`${m[2]}-${parseInt(m[1])}`);
-        }
-        return months.length > 0 && months.join(",") !== prevKey;
-      },
-      beforeKey,
-      { timeout: 15000 }
-    );
-  } catch {
-    console.log("次月への遷移完了待ちがタイムアウトしました");
-  }
-
-  // 日付セルの再描画完了を待つ
-  try {
-    await page.waitForLoadState("networkidle", { timeout: 10000 });
-  } catch {}
-
+  await page.waitForTimeout(8000);
   return true;
 }
 
@@ -218,32 +191,18 @@ async function selectRoomType(page) {
   }
 
   await roomTypeDropdown.click();
+  await page.waitForTimeout(1000);
 
   const option = page.locator(`text=${TARGET_ROOM_TYPE}`).first();
 
-  try {
-    await option.waitFor({ state: "visible", timeout: 5000 });
-  } catch {
-    console.log(`「${TARGET_ROOM_TYPE}」の選択肢が表示されません。`);
+  if ((await option.count()) === 0) {
+    console.log(`「${TARGET_ROOM_TYPE}」の選択肢が見つかりません。`);
     return false;
   }
 
   await option.click();
   console.log(`部屋タイプ「${TARGET_ROOM_TYPE}」を選択しました`);
-
-  // 選択後のカレンダー再描画を待つ
-  try {
-    await page.waitForLoadState("networkidle", { timeout: 10000 });
-  } catch {}
-  try {
-    await page
-      .locator("div.css-fco0xz")
-      .first()
-      .waitFor({ state: "visible", timeout: 10000 });
-  } catch {
-    console.log("カレンダーコンテナの再描画待ちがタイムアウトしました");
-  }
-
+  await page.waitForTimeout(2000);
   return true;
 }
 
@@ -253,21 +212,7 @@ async function selectRoomType(page) {
 export async function checkAvailability(page) {
   console.log("ページにアクセス中...");
   await page.goto(TARGET_URL, { waitUntil: "domcontentloaded" });
-
-  // ネットワーク安定＆カレンダー要素の出現を待つ
-  try {
-    await page.waitForLoadState("networkidle", { timeout: 15000 });
-  } catch {
-    console.log("networkidle 待機がタイムアウトしました（続行）");
-  }
-  try {
-    await page
-      .locator("div.css-fco0xz")
-      .first()
-      .waitFor({ state: "visible", timeout: 15000 });
-  } catch {
-    console.log("カレンダーコンテナの初期表示待ちがタイムアウトしました");
-  }
+  await page.waitForTimeout(5000);
 
   const title = await page.title();
   console.log(`ページタイトル: ${title}`);
@@ -276,10 +221,7 @@ export async function checkAvailability(page) {
 
   // 部屋タイプを選択
   console.log("部屋タイプを選択中...");
-  const selected = await selectRoomType(page);
-  if (!selected) {
-    throw new Error("部屋タイプの選択に失敗しました");
-  }
+  await selectRoomType(page);
 
   await page.screenshot({ path: "screenshot_room_selected.png", fullPage: true });
 
