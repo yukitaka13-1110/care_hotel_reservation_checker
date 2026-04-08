@@ -8,7 +8,6 @@ const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const TARGET_URL =
   "https://tabichat.jp/engine/hotels/sanada_cl?guests%5B0%5D%5Badults%5D=1";
 
-const TARGET_ROOM_TYPE = "産後ケアホテル";
 const TARGET_MONTHS = [6, 7, 8, 9];
 
 const LOOP_DURATION_MS = 15 * 60 * 1000; // 15分
@@ -150,33 +149,6 @@ async function checkCurrentCalendarAvailability(page, targetMonth) {
 }
 
 // ============================================================
-// 部屋タイプを選択
-// ============================================================
-async function selectRoomType(page) {
-  const roomTypeDropdown = page.locator("text=全ての部屋タイプ").first();
-
-  if ((await roomTypeDropdown.count()) === 0) {
-    console.log("「全ての部屋タイプ」ドロップダウンが見つかりません。");
-    return false;
-  }
-
-  await roomTypeDropdown.click();
-  await page.waitForTimeout(5000);
-
-  const option = page.locator(`text=${TARGET_ROOM_TYPE}`).first();
-
-  if ((await option.count()) === 0) {
-    console.log(`「${TARGET_ROOM_TYPE}」の選択肢が見つかりません。`);
-    return false;
-  }
-
-  await option.click();
-  console.log(`部屋タイプ「${TARGET_ROOM_TYPE}」を選択しました`);
-  await page.waitForTimeout(2000);
-  return true;
-}
-
-// ============================================================
 // 空室チェック（1回分）
 // ============================================================
 async function checkAvailability(page) {
@@ -186,9 +158,6 @@ async function checkAvailability(page) {
 
   const title = await page.title();
   console.log(`ページタイトル: ${title}`);
-
-  // 部屋タイプを選択
-  await selectRoomType(page);
 
   const allAvailability = {};
 
