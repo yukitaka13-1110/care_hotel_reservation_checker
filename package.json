@@ -6,8 +6,5 @@
   "scripts": {
     "check": "node check.mjs",
     "check-loop": "node check-loop.mjs"
-  },
-  "dependencies": {
-    "playwright": "^1.49.0"
   }
 }
