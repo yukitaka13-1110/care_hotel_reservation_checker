@@ -84,7 +84,7 @@ async function main() {
     `=== ループチェック開始（最大${LOOP_DURATION_MS / 1000 / 60}分間、${CHECK_INTERVAL_MS / 1000}秒間隔） ===`,
   );
 
-  let wasAvailable = false;
+  let prevRatesLength = 0;
 
   while (Date.now() - startTime < LOOP_DURATION_MS) {
     checkCount++;
@@ -93,13 +93,12 @@ async function main() {
     try {
       const json = await fetchAvailability();
       const rates = Array.isArray(json.rates) ? json.rates : [];
-      const isAvailable = rates.length > 0;
 
       if (checkCount % 30 === 0 || checkCount === 1) {
         console.log(`#${checkCount} (経過${elapsedSec}秒): rates=${rates.length}件`);
       }
 
-      if (isAvailable && !wasAvailable) {
+      if (rates.length > 0 && rates.length !== prevRatesLength) {
         const raw = JSON.stringify(json);
         const message =
           `🏨 ケアホテルに空きが出ました！\n\n` +
@@ -112,7 +111,7 @@ async function main() {
         await sendLineNotification(message);
       }
 
-      wasAvailable = isAvailable;
+      prevRatesLength = rates.length;
     } catch (e) {
       console.error(`チェック #${checkCount} でエラー: ${e.message}`);
     }
