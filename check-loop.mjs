@@ -107,8 +107,6 @@ async function main() {
 
         console.log(message);
         await sendLineNotification(message);
-        console.log("空きを検出しました。ループを終了します。");
-        return;
       }
     } catch (e) {
       console.error(`チェック #${checkCount} でエラー: ${e.message}`);
